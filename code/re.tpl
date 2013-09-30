@@ -98,5 +98,3 @@ FINAL_SECTION
   write_R(biomsd.sd);
 
   mysum.close();
-
-  mysum.close();

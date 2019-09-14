@@ -22,9 +22,7 @@
   extern "C"  {
     void ad_boundf(int i);
   }
-#include <gdbprintlib.cpp>
-
-#include <re.htp>
+#include <rem.htp>
 
   df1b2_parameters * df1b2_parameters::df1b2_parameters_ptr=0;
   model_parameters * model_parameters::model_parameters_ptr=0;
@@ -66,21 +64,28 @@ model_data::model_data(int argc,char * argv[]) : ad_comm(argc,argv)
   srv_sd = sqrt(log(srv_sd));
   yvar = elem_prod(srv_sd,srv_sd);
   yconst = log(2.0*M_PI*yvar);
-  num_indx_LL.allocate("num_indx_LL");
-  PE_vec_LL.allocate(1,num_indx_LL,"PE_vec_LL");
-  nobs_LL.allocate("nobs_LL");
-  LL_wt.allocate("LL_wt");
-  yrs_srv_LL.allocate(1,nobs_LL,"yrs_srv_LL");
-  srv_est_LL.allocate(1,nobs_LL,1,num_indx_LL,"srv_est_LL");
-  srv_cv_LL.allocate(1,nobs_LL,1,num_indx_LL,"srv_cv_LL");
-  srv_sd_LL.allocate(1,nobs_LL,1,num_indx_LL);
- if (mean(srv_cv_LL)>5) srv_cv_LL = elem_div(srv_cv_LL,srv_est_LL+0.0001);
- srv_sd_LL = elem_prod(srv_cv_LL,srv_cv_LL) + 1;
- srv_sd_LL = sqrt(log(srv_sd_LL));
-  yvar_LL.allocate(1,nobs_LL,1,num_indx_LL);
-  yconst_LL.allocate(1,nobs_LL,1,num_indx_LL);
- yvar_LL = elem_prod(srv_sd_LL,srv_sd_LL);
- yconst_LL = log(2.0*M_PI*yvar_LL);
+  num_indx_srv2.allocate("num_indx_srv2");
+  PE_vec_srv2.allocate(1,num_indx_srv2,"PE_vec_srv2");
+  nobs_srv2.allocate("nobs_srv2");
+  srv2_wt.allocate("srv2_wt");
+  yrs_srv2.allocate(1,nobs_srv2,"yrs_srv2");
+  srv_est_srv2.allocate(1,nobs_srv2,1,num_indx_srv2,"srv_est_srv2");
+  srv_cv_srv2.allocate(1,nobs_srv2,1,num_indx_srv2,"srv_cv_srv2");
+  srv_sd_srv2.allocate(1,nobs_srv2,1,num_indx_srv2);
+  logdat( num_indx_srv2);
+  logdat( PE_vec_srv2);
+  logdat( nobs_srv2);
+  logdat( srv2_wt); 
+  logdat( yrs_srv2);
+  logdat( srv_est_srv2);
+  logdat( srv_cv_srv2);
+  if (mean(srv_cv_srv2)>5) srv_cv_srv2 = elem_div(srv_cv_srv2,srv_est_srv2+0.0001);
+  srv_sd_srv2 = elem_prod(srv_cv_srv2,srv_cv_srv2) + 1;
+  srv_sd_srv2 = sqrt(log(srv_sd_srv2));
+  yvar_srv2.allocate(1,nobs_srv2,1,num_indx_srv2);
+  yconst_srv2.allocate(1,nobs_srv2,1,num_indx_srv2);
+ yvar_srv2 = elem_prod(srv_sd_srv2,srv_sd_srv2);
+ yconst_srv2 = log(2.0*M_PI*yvar_srv2);
 }
 
 model_parameters::model_parameters(int sz,int argc,char * argv[]) : 
@@ -89,10 +94,10 @@ model_parameters::model_parameters(int sz,int argc,char * argv[]) :
   model_parameters_ptr=this;
   initializationfunction();
   logSdLam.allocate(1,n_PE,-5,2,1,"logSdLam");
-  log_q_LL.allocate(1,n_q,2,"log_q_LL");
+  log_q_srv2.allocate(1,n_q,2,"log_q_srv2");
   biomsd.allocate(styr,endyr,1,num_indx,"biomsd");
   biomA.allocate(styr,endyr,1,num_indx,"biomA");
-  LL_est.allocate(styr,endyr,1,num_indx_LL,"LL_est");
+  srv2_est.allocate(styr,endyr,1,num_indx_srv2,"srv2_est");
   biom.allocate(styr,endyr,1,num_indx,"biom");
   Like.allocate("Like");
   prior_function_value.allocate("prior_function_value");
@@ -106,31 +111,28 @@ void model_parameters::userfunction(void)
   jnll=0.0;
   for(int j=1; j<=num_indx; ++j)
   {
-  for(int i=styr+1; i<=endyr; ++i)
-  {
-    step(biom(i-1,j),biom(i,j),logSdLam(PE_vec(j)));
+    for(int i=styr+1; i<=endyr; ++i)
+    {
+      step(biom(i-1,j),biom(i,j),logSdLam(PE_vec(j)));
+    }
+    for(int i=1; i<=nobs; ++i)
+    {
+      if(srv_est(i,j)>-1) obs(biom(yrs_srv(i),j),i,j);
+    }
   }
-  for(int i=1; i<=nobs; ++i)
-  {
-    if(srv_est(i,j)>-1) obs(biom(yrs_srv(i),j),i,j);
-  }
-  }
-  //For now - hard wire LL survey estimates
+  //For now - hard wire srv2 survey estimates
   for(int i=styr; i<=endyr; ++i)
   {
-    //LL_est(i,1) = exp(log_q_LL)*exp(biom(i,1));
-    //LL_est(i,2) = exp(log_q_LL)*exp(biom(i,2));
-    //LL_est(i,3) = exp(log_q_LL)*exp(biom(i,3));
-    LL_est(i,1) = exp(log_q_LL(1))*exp(biom(i,1));
-    LL_est(i,2) = exp(log_q_LL(2))*exp(biom(i,2));
-    LL_est(i,3) = exp(log_q_LL(3))*exp(biom(i,3));
+    srv2_est(i) = mfexp(log_q_srv2 + biom(i));
+    //srv2_est(i,2) = exp(log_q_srv2(2))*exp(biom(i,2));
+    //srv2_est(i,3) = exp(log_q_srv2(3))*exp(biom(i,3));
   }
-  for(int j=1; j<=num_indx_LL; ++j)
+  for(int j=1; j<=num_indx_srv2; ++j)
   {
-  for(int i=1; i<=nobs_LL; ++i)
-  {
-    obs_LL(LL_est(yrs_srv_LL(i),j),i,j);
-  }
+    for(int i=1; i<=nobs_srv2; ++i)
+    {
+      obs_srv2(srv2_est(yrs_srv2(i),j),i,j);
+    }
   }
   if (sd_phase()) 
   {
@@ -158,11 +160,11 @@ void SEPFUN1  model_parameters::obs(const dvariable& biom, int i, int j)
   end_df1b2_funnel();
 }
 
-void SEPFUN1  model_parameters::obs_LL(const dvariable& biom, int i, int j)
+void SEPFUN1  model_parameters::obs_srv2(const dvariable& biom, int i, int j)
 {
   begin_df1b2_funnel();
   ofstream& evalout= *pad_evalout;
-  jnll+=LL_wt*0.5*(yconst_LL(i,j) + square(log(biom)-log(srv_est_LL(i,j)))/yvar_LL(i,j));
+  jnll+=srv2_wt*0.5*(yconst_srv2(i,j) + square(log(biom)-log(srv_est_srv2(i,j)))/yvar_srv2(i,j));
   end_df1b2_funnel();
 }
 
@@ -178,47 +180,47 @@ void model_parameters::report(const dvector& gradients)
   biomsd = biom;
   Like = jnll;
   //report << biom << endl;
-  report << LL_est << endl;
+  report << srv2_est << endl;
 }
 
 void model_parameters::final_calcs()
 {
-  dvar_vector srv_est_TOT = rowsum(srv_est);
-  dvar_vector srv_est_TOT_LL = rowsum(srv_est_LL);
-  dvar_vector biom_TOT = rowsum(biomA);
-  dvar_vector SD_numer = rowsum(elem_prod(exp(2*biomsd+square(biomsd.sd)),(exp(square(biomsd.sd))-1)));
-  dvar_vector SD_denom = square(rowsum(exp(biomsd+0.5*square(biomsd.sd))));
-  dvar_vector SD_biom_TOT = sqrt(log(elem_div(SD_numer,SD_denom)+1));
-  dvar_vector biom_TOT_UCI = exp(log(biom_TOT)+1.96*SD_biom_TOT);
-  dvar_vector biom_TOT_LCI = exp(log(biom_TOT)-1.96*SD_biom_TOT);
-  dvar_vector biom_TOT_LL = rowsum(LL_est);
-  dvar_vector SD_numer_LL = rowsum(elem_prod(exp(2*log(LL_est)+square(biomsd.sd)),(exp(square(biomsd.sd))-1)));
-  dvar_vector SD_denom_LL = square(rowsum(exp(log(LL_est)+0.5*square(biomsd.sd))));
-  dvar_vector SD_biom_TOT_LL = sqrt(log(elem_div(SD_numer_LL,SD_denom_LL)+1));
-  dvar_vector biom_TOT_UCI_LL = exp(log(biom_TOT_LL)+1.96*SD_biom_TOT_LL);
-  dvar_vector biom_TOT_LCI_LL = exp(log(biom_TOT_LL)-1.96*SD_biom_TOT_LL);
-  dvar_matrix UCI = exp(biomsd+1.96*biomsd.sd);
-  dvar_matrix LCI = exp(biomsd-1.96*biomsd.sd);
+  dvar_vector srv_est_TOT     = rowsum(srv_est);
+  dvar_vector srv_est_TOT_srv2  = rowsum(srv_est_srv2);
+  dvar_vector biom_TOT        = rowsum(biomA);
+  dvar_vector SD_numer        = rowsum(elem_prod(exp(2*biomsd+square(biomsd.sd)),(exp(square(biomsd.sd))-1)));
+  dvar_vector SD_denom        = square(rowsum(exp(biomsd+0.5*square(biomsd.sd))));
+  dvar_vector SD_biom_TOT     = sqrt(log(elem_div(SD_numer,SD_denom)+1));
+  dvar_vector biom_TOT_UCI    = exp(log(biom_TOT)+1.96*SD_biom_TOT);
+  dvar_vector biom_TOT_LCI    = exp(log(biom_TOT)-1.96*SD_biom_TOT);
+  dvar_vector biom_TOT_srv2     = rowsum(srv2_est);
+  dvar_vector SD_numer_srv2     = rowsum(elem_prod(exp(2*log(srv2_est)+square(biomsd.sd)),(exp(square(biomsd.sd))-1)));
+  dvar_vector SD_denom_srv2     = square(rowsum(exp(log(srv2_est)+0.5*square(biomsd.sd))));
+  dvar_vector SD_biom_TOT_srv2  = sqrt(log(elem_div(SD_numer_srv2,SD_denom_srv2)+1));
+  dvar_vector biom_TOT_UCI_srv2 = exp(log(biom_TOT_srv2)+1.96*SD_biom_TOT_srv2);
+  dvar_vector biom_TOT_LCI_srv2 = exp(log(biom_TOT_srv2)-1.96*SD_biom_TOT_srv2);
+  dvar_matrix UCI             = exp(biomsd+1.96*biomsd.sd);
+  dvar_matrix LCI             = exp(biomsd-1.96*biomsd.sd);
   write_R(yrs_srv);
   write_R(srv_est_TOT);
-  write_R(yrs_srv_LL);
-  write_R(srv_est_TOT_LL);
-  write_R(log_q_LL);
+  write_R(yrs_srv2);
+  write_R(srv_est_TOT_srv2);
+  write_R(log_q_srv2);
   write_R(yrs);
   write_R(biom_TOT);
   write_R(SD_biom_TOT);
   write_R(biom_TOT_UCI);
   write_R(biom_TOT_LCI);
-  write_R(biom_TOT_LL);
-  write_R(SD_biom_TOT_LL);
-  write_R(biom_TOT_UCI_LL);
-  write_R(biom_TOT_LCI_LL);
+  write_R(biom_TOT_srv2);
+  write_R(SD_biom_TOT_srv2);
+  write_R(biom_TOT_UCI_srv2);
+  write_R(biom_TOT_LCI_srv2);
   write_R(yrs_srv);
   write_R(srv_est);
   write_R(srv_sd);
-  write_R(yrs_srv_LL);
-  write_R(srv_est_LL);
-  write_R(srv_sd_LL);
+  write_R(yrs_srv2);
+  write_R(srv_est_srv2);
+  write_R(srv_sd_srv2);
   write_R(yrs);
   write_R(LCI);
   write_R(biomA);
@@ -323,31 +325,28 @@ void df1b2_parameters::user_function(void)
   jnll=0.0;
   for(int j=1; j<=num_indx; ++j)
   {
-  for(int i=styr+1; i<=endyr; ++i)
-  {
-    step(biom(i-1,j),biom(i,j),logSdLam(PE_vec(j)));
+    for(int i=styr+1; i<=endyr; ++i)
+    {
+      step(biom(i-1,j),biom(i,j),logSdLam(PE_vec(j)));
+    }
+    for(int i=1; i<=nobs; ++i)
+    {
+      if(srv_est(i,j)>-1) obs(biom(yrs_srv(i),j),i,j);
+    }
   }
-  for(int i=1; i<=nobs; ++i)
-  {
-    if(srv_est(i,j)>-1) obs(biom(yrs_srv(i),j),i,j);
-  }
-  }
-  //For now - hard wire LL survey estimates
+  //For now - hard wire srv2 survey estimates
   for(int i=styr; i<=endyr; ++i)
   {
-    //LL_est(i,1) = exp(log_q_LL)*exp(biom(i,1));
-    //LL_est(i,2) = exp(log_q_LL)*exp(biom(i,2));
-    //LL_est(i,3) = exp(log_q_LL)*exp(biom(i,3));
-    LL_est(i,1) = exp(log_q_LL(1))*exp(biom(i,1));
-    LL_est(i,2) = exp(log_q_LL(2))*exp(biom(i,2));
-    LL_est(i,3) = exp(log_q_LL(3))*exp(biom(i,3));
+    srv2_est(i) = mfexp(log_q_srv2 + biom(i));
+    //srv2_est(i,2) = exp(log_q_srv2(2))*exp(biom(i,2));
+    //srv2_est(i,3) = exp(log_q_srv2(3))*exp(biom(i,3));
   }
-  for(int j=1; j<=num_indx_LL; ++j)
+  for(int j=1; j<=num_indx_srv2; ++j)
   {
-  for(int i=1; i<=nobs_LL; ++i)
-  {
-    obs_LL(LL_est(yrs_srv_LL(i),j),i,j);
-  }
+    for(int i=1; i<=nobs_srv2; ++i)
+    {
+      obs_srv2(srv2_est(yrs_srv2(i),j),i,j);
+    }
   }
   if (sd_phase()) 
   {
@@ -375,11 +374,11 @@ void   df1b2_pre_parameters::obs(const funnel_init_df1b2variable& biom, int i, i
   end_df1b2_funnel();
 }
 
-void   df1b2_pre_parameters::obs_LL(const funnel_init_df1b2variable& biom, int i, int j)
+void   df1b2_pre_parameters::obs_srv2(const funnel_init_df1b2variable& biom, int i, int j)
 {
   begin_df1b2_funnel();
   ofstream& evalout= *pad_evalout;
-  jnll+=LL_wt*0.5*(yconst_LL(i,j) + square(log(biom)-log(srv_est_LL(i,j)))/yvar_LL(i,j));
+  jnll+=srv2_wt*0.5*(yconst_srv2(i,j) + square(log(biom)-log(srv_est_srv2(i,j)))/yvar_srv2(i,j));
   end_df1b2_funnel();
 }
 
@@ -428,10 +427,10 @@ end_df1b2_funnel_stuff();
 void df1b2_parameters::deallocate() 
 {
   logSdLam.deallocate();
-  log_q_LL.deallocate();
+  log_q_srv2.deallocate();
   biomsd.deallocate();
   biomA.deallocate();
-  LL_est.deallocate();
+  srv2_est.deallocate();
   biom.deallocate();
   Like.deallocate();
   prior_function_value.deallocate();
@@ -441,10 +440,10 @@ void df1b2_parameters::deallocate()
 void df1b2_parameters::allocate(void) 
 {
   logSdLam.allocate(1,n_PE,-5,2,1,"logSdLam");
-  log_q_LL.allocate(1,n_q,2,"log_q_LL");
+  log_q_srv2.allocate(1,n_q,2,"log_q_srv2");
   biomsd.allocate(styr,endyr,1,num_indx,"biomsd");
   biomA.allocate(styr,endyr,1,num_indx,"biomA");
-  LL_est.allocate(styr,endyr,1,num_indx_LL,"LL_est");
+  srv2_est.allocate(styr,endyr,1,num_indx_srv2,"srv2_est");
   biom.allocate(styr,endyr,1,num_indx,"biom");
   Like.allocate("Like");
   prior_function_value.allocate("prior_function_value");

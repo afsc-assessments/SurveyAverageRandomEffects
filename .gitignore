@@ -7,6 +7,9 @@ src/re.obj
 src/re.htp
 src/re.exe
 
+tests/re_runs
+tests/rem_runs
+
 # ADMB standard output files
 *.b0*
 *.bar

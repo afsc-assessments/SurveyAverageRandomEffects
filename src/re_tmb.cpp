@@ -5,24 +5,20 @@
 template<class Type>
 Type objective_function<Type>::operator() ()
 {
-  DATA_INTEGER(styr);
-  DATA_INTEGER(endyr);
+  DATA_IVECTOR(yrs);
   DATA_IVECTOR(yrs_srv);
   DATA_IVECTOR(yrs_srv_ind);
   DATA_VECTOR(srv_est);
-  DATA_VECTOR(srv_cv);
-  int nobs=yrs_srv.size();
+  DATA_VECTOR(srv_sd);
 
   PARAMETER(logSdLam);
   PARAMETER_VECTOR(biom);
 
-  // Gotta be a better way to do this
-  int nyrs=endyr-styr+1; //yrs.size();
-  vector<int> yrs(nyrs);
-  for(int i=0; i<nyrs; i++) yrs(i)=styr+i;
-  vector<Type> srv_sd(srv_cv.size());
-  srv_sd = srv_cv.array()*srv_cv.array();
-  srv_sd = sqrt(log(1+srv_sd));
+  int nyrs=yrs.size();
+  int nobs=yrs_srv.size();
+  // vector<Type> srv_sd(srv_cv.size());
+  // srv_sd = srv_cv.array()*srv_cv.array();
+  // srv_sd = sqrt(log(1+srv_sd));
 
   Type jnll=0;
   // The random effect likelihood contribution

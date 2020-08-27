@@ -28,14 +28,14 @@ test_re_species <- function(d){
   setwd('re_runs')
   on.exit(setwd('..'))
   message("Testing RE model for ", m)
+  file.remove('rwout.rep')
   test <- system(paste('re -ind', d), ignore.stdout=TRUE)
-  ## if(test!=0) stop('Failed to run ', m)
+  if(!file.exists('rwout.rep')) stop('Failed to run ', m)
   out <- read_re_output('rwout.rep')
   expect_known_output(out, file=paste0('../testthat/_expect_', m))
   ## Get the data for TMB from the RE output
   srv_sd <- out$srv_sd[!is.na(out$srv_sd)]
   srv_est <- out$srv_est[!is.na(out$srv_est)]
-  ## srv_cv  <- sqrt(log(1+(srv_se/srv_est)^2))
   yrs_srv <- out$year[!is.na(out$srv_est)]
   data <- list(yrs=out$year, yrs_srv=yrs_srv,
                yrs_srv_ind=match(yrs_srv, out$year)-1,

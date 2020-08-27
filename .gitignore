@@ -6,6 +6,8 @@ src/re.cpp
 src/re.obj
 src/re.htp
 src/re.exe
+src/re_tmb.o
+src/re_tmb.dll
 
 tests/re_runs
 tests/rem_runs
@@ -33,5 +35,6 @@ gradient.*
 *.tmp
 *_in.ctl
 *_in.dat
+eigv.rpt
 variance
 sims

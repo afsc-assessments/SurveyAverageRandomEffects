@@ -6,11 +6,13 @@ dir.create('rem_runs', showWarnings=FALSE)
 
 ## Recompile models and move to
 setwd('../src')
-system('admb re -r')
+system('admb -r re ')
 test <- file.copy('re.exe', to='../tests/re_runs/re.exe', overwrite=TRUE)
+test <- file.copy('re', to='../tests/re_runs/re', overwrite=TRUE)
 if(!test) stop("Failed to make new re.exe model")
-system('admb rem -r')
+system('admb -r rem ')
 test <- file.copy('rem.exe', to='../tests/rem_runs/rem.exe', overwrite=TRUE)
+test <- file.copy('rem', to='../tests/rem_runs/rem', overwrite=TRUE)
 if(!test) stop("Failed to make new rem.exe model")
 setwd('../tests')
 
@@ -29,7 +31,7 @@ test_re_species <- function(d){
   on.exit(setwd('..'))
   message("Testing RE model for ", m)
   file.remove('rwout.rep')
-  test <- system(paste('re -ind', d), ignore.stdout=TRUE)
+  test <- system(paste('./re -ind', d), ignore.stdout=TRUE)
   if(!file.exists('rwout.rep')) stop('Failed to run ', m)
   out <- read_re_output('rwout.rep')
   expect_known_output(out, file=paste0('../testthat/_expect_', m))
@@ -51,6 +53,7 @@ test_re_species <- function(d){
 
 spp <- list.files('data', pattern='.dat')
 results <- lapply(spp, test_re_species) %>% do.call(rbind,.)
+test_re_species("bog.dat")
 
 library(dplyr)
 library(tidyr)

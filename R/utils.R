@@ -93,3 +93,43 @@ write_re_input <- function(file, years, biomass, CV, tag=NULL,
   write(CV, out, ncolumns=N, append=TRUE)
   message(paste("Finished writing RE input for", survey, sp))
 }
+
+
+#' Test the RE on a single species. This compares a current ADMB
+#' univariate run to a previous run. It tests *continuity* not
+#' correctness
+#'
+#' @param d The .dat file name, e.g., bigskate_t.dat, found in
+#' tests/data folder
+#'
+#' @return A data.frame with ADMB and TMB estimates for comparing
+#' @details It will throw an error if the results have changed,
+#'   otherwise results are consistent.
+test_re_species <- function(d){
+  m <- gsub('.dat','',d)
+  file.copy(file.path('data', d), to=file.path('re_runs',d), overwrite=TRUE)
+  setwd('re_runs')
+  on.exit(setwd('..'))
+  message("Testing RE model for ", m)
+  file.remove('rwout.rep')
+  test <- system(paste('./re -ind', d), ignore.stdout=TRUE)
+  if(!file.exists('rwout.rep')) stop('Failed to run ', m)
+  out <- read_re_output('rwout.rep')
+  ## This is the piece that checks against previous runs, and
+  ## does nothing if it matches, otherwise throws an error
+  expect_known_output(out, file=paste0('../testthat/_expect_', m))
+  ## Get the data for TMB from the RE output
+  srv_sd <- out$srv_sd[!is.na(out$srv_sd)]
+  srv_est <- out$srv_est[!is.na(out$srv_est)]
+  yrs_srv <- out$year[!is.na(out$srv_est)]
+  data <- list(yrs=out$year, yrs_srv=yrs_srv,
+               yrs_srv_ind=match(yrs_srv, out$year)-1,
+               srv_est=srv_est, srv_sd=srv_sd)
+  pars <- list(logSdLam=1, biom=out$log_biomass)
+  obj <- MakeADFun(data, pars, random='biom')
+  obj$env$beSilent()
+  opt <- with(obj, nlminb(par, fn, gr))
+  adrep <- sdreport(obj)
+  results <- cbind(species=m, out, tmb_log_biomass=adrep$value, tmb_SE_log=adrep$sd)
+  return(results)
+}

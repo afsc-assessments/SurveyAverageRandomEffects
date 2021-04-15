@@ -9,16 +9,16 @@ Type objective_function<Type>::operator() ()
   DATA_IVECTOR(yrs_srv);
   DATA_IVECTOR(yrs_srv_ind);
   DATA_VECTOR(srv_est);
-  DATA_VECTOR(srv_sd);
+  DATA_VECTOR(srv_cv);
 
   PARAMETER(logSdLam);
   PARAMETER_VECTOR(biom);
 
   int nyrs=yrs.size();
   int nobs=yrs_srv.size();
-  // vector<Type> srv_sd(srv_cv.size());
-  // srv_sd = srv_cv.array()*srv_cv.array();
-  // srv_sd = sqrt(log(1+srv_sd));
+  vector<Type> srv_sd(srv_cv.size());
+  srv_sd = srv_cv.array()*srv_cv.array();
+  srv_sd = sqrt(log(1+srv_sd));
 
   Type jnll=0;
   // The random effect likelihood contribution
@@ -29,8 +29,10 @@ Type objective_function<Type>::operator() ()
   for(int i=0; i<nobs; i++){
     jnll-=dnorm(biom(yrs_srv_ind(i)), log(srv_est(i)), srv_sd(i), true);
   }
+  jnll += pow(logSdLam+1.5,2);// Modest penalty to keep process error from getting too large...
 
   REPORT(biom);
+  REPORT(srv_sd);
   ADREPORT(biom)
   return(jnll);
 }

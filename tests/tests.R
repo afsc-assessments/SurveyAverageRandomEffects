@@ -9,7 +9,11 @@
 ### them. See help for ?testthat for more information.
 
 ### In addition I created a TMB model version and this also runs
-### this and checks it is the same.
+### this and checks it is the same. There are some minor
+### differences so a tolerance of 1e-4 is used. I believe this is
+### due to differences in the inner optimizer (i.e., the RE don't
+### match exactly given the same fixed effects), but was unable
+### to confirm this (see below).
 
 ### To run, open this script and set the working directory to the
 ### 'test' folder then run below.
@@ -35,6 +39,7 @@ test <- file.copy('rem.exe', to='../tests/rem_runs/rem.exe', overwrite=TRUE)
 ##test <- file.copy('rem', to='../tests/rem_runs/rem', overwrite=TRUE)
 if(!test) stop("Failed to make new rem.exe model")
 setwd('../tests')
+
 ### Recompile TMB models
 library(TMB)
 ## dyn.unload(dynlib('../src/re_tmb'))
@@ -51,10 +56,49 @@ results <- lapply(spp, test_re_species) %>% do.call(rbind,.)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-results <- test_re_species("bog.dat")
-results <- results %>%
-  mutate(log_biomass_relerror=(log_biomass-tmb_log_biomass)/log_biomass,
-         SE_log_relerror=(SE_log-tmb_SE_log)/SE_log) %>%
-  pivot_longer(cols=c('SE_log_relerror', 'log_biomass_relerror'),
-  values_to='relative_error')
-ggplot(results, aes(year, relative_error, color=name)) + geom_point()
+g <- results %>%
+  mutate(log_biomass_re=(log_biomass-tmb_log_biomass)/log_biomass,
+         SE_log_re=(SE_log-tmb_SE_log)/SE_log) %>%
+  pivot_longer(cols=c('SE_log_re', 'log_biomass_re'),
+               values_to='relative_error') %>%
+  ggplot(aes(species, abs(relative_error), col=log_biomass)) + geom_point() +
+  facet_wrap('name', ncol=1) + scale_y_log10() +
+  theme(axis.text.x=element_text(angle=90, vjust=0.5, hjust=1)) +
+  labs(x=NA, y='Absolute relative error (log space)',
+       title='ADMB-RE vs TMB Random Effects Model Differences')
+ggsave('TMB_vs_ADMB_comparison.png', g, width=8, height=6)
+
+
+## ## There are some small differences. I think this is due to the
+## ## inner optimizer being different. Below is some old code that
+## ## was trying to compare the two. It doesn't work but we
+## ## might want to revisit it later.
+## compile('../src/re_tmb.cpp')
+## dyn.load(dynlib('../src/re_tmb'))
+## set.seed(3234)
+## yrs <- 1:30
+## est <- sort(rnorm(30, 1e12, 1e12*.1))
+## ## est <- est + runif(30)
+## CV <- rep(.1, 30)
+## plot(est)
+## ## Fit in ADMB first to get MLE
+## write_re_input('re_runs/test.dat', years=yrs, biomass=est, CV=CV,
+##                tag='test to compare ADMB and TMB')
+## setwd('re_runs/')
+## system('re -ind test.dat')
+## out <- read_re_output()
+## setwd('..')
+## par.mle <- as.numeric(readLines('re_runs/re.par')[3])
+## ## Use MLE as starting value for TMB
+## data <- list(yrs=yrs, yrs_srv=yrs,
+##              yrs_srv_ind=yrs-1,
+##              srv_est=est, srv_cv=CV)
+## pars <- list(logSdLam=par.mle, biom=log(est))
+## obj <- MakeADFun(data, pars, random='biom')
+## obj$env$beSilent()
+## ## opt <- with(obj, nlminb(par, fn, gr))
+## adrep <- sdreport(obj)
+## results <- test_re_species('test.dat')
+## results %>%
+##   transmute(RE_est=(tmb_log_biomass-log_biomass)/log_biomass,
+##             RE_sd=(tmb_SE_log-SE_log)/SE_log) %>% head(3)

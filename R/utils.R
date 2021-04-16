@@ -54,6 +54,7 @@ read_re_output <- function(file='rwout.rep', skip_data=FALSE,
 #'
 #' @seealso read_re_output
 write_re_input <- function(file, years, biomass, CV, tag=NULL,
+                           sp='species', survey='survey',
                            yr_start=NULL, yr_end=NULL) {
   ## input checks
   stopifnot(all.equal(length(years), length(biomass), length(CV)))
@@ -69,7 +70,7 @@ write_re_input <- function(file, years, biomass, CV, tag=NULL,
   stopifnot(yr_end>=max(years))
 
   out <- file
-  write(paste("#", survey), out,ncolumns =  1 )
+  write(paste("#", tag), out,ncolumns =  1 )
 
   ## Start new file
   N <- length(years)
@@ -105,13 +106,13 @@ write_re_input <- function(file, years, biomass, CV, tag=NULL,
 #' @return A data.frame with ADMB and TMB estimates for comparing
 #' @details It will throw an error if the results have changed,
 #'   otherwise results are consistent.
-test_re_species <- function(d){
+test_re_species <- function(d, test_tmb=TRUE){
   m <- gsub('.dat','',d)
   file.copy(file.path('data', d), to=file.path('re_runs',d), overwrite=TRUE)
   setwd('re_runs')
   on.exit(setwd('..'))
   message("Testing RE model for ", m)
-  file.remove('rwout.rep')
+  if(file.exists('rwout.rep')) file.remove('rwout.rep')
   test <- system(paste('./re -ind', d), ignore.stdout=TRUE)
   if(!file.exists('rwout.rep')) stop('Failed to run ', m)
   out <- read_re_output('rwout.rep')
@@ -122,14 +123,27 @@ test_re_species <- function(d){
   srv_sd <- out$srv_sd[!is.na(out$srv_sd)]
   srv_est <- out$srv_est[!is.na(out$srv_est)]
   yrs_srv <- out$year[!is.na(out$srv_est)]
+  ## Get the MLE to put into TMB so those match as good as
+  ## possible
+  par.mle <- as.numeric(readLines('re.par')[3])
+  ## Convert SD back to CV which then gets converted internally
+  ## back to SD
+  srv_cv <- sqrt(exp(srv_sd^2)-1)
   data <- list(yrs=out$year, yrs_srv=yrs_srv,
                yrs_srv_ind=match(yrs_srv, out$year)-1,
-               srv_est=srv_est, srv_sd=srv_sd)
-  pars <- list(logSdLam=1, biom=out$log_biomass)
+               srv_est=srv_est, srv_cv=srv_cv)
+  pars <- list(logSdLam=par.mle, biom=out$log_biomass)
   obj <- MakeADFun(data, pars, random='biom')
   obj$env$beSilent()
-  opt <- with(obj, nlminb(par, fn, gr))
+  obj$fn()
+  ##   opt <- with(obj, nlminb(par, fn, gr))
   adrep <- sdreport(obj)
+  if(test_tmb){
+    expect_equal(out$log_biomass, as.numeric(adrep$value), tolerance=1e-4)
+    expect_equal(out$SE_log, as.numeric(adrep$sd), tolerance=1e-4)
+  }
   results <- cbind(species=m, out, tmb_log_biomass=adrep$value, tmb_SE_log=adrep$sd)
   return(results)
 }
+
+

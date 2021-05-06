@@ -7,8 +7,8 @@ library(ggplot2)
 theme_set(theme_bw())
 library(TMB)
 library(tmbstan)
-## dyn.unload(dynlib('../src/re_tmb'))
-## file.remove('../src/re_tmb.dll')
+dyn.unload(dynlib('src/re_tmb'))
+file.remove('src/re_tmb.dll')
 compile('src/re_tmb.cpp')
 dyn.load(dynlib('src/re_tmb'))
 source('R/utils.R')
@@ -29,6 +29,21 @@ obj$env$beSilent()
 obj$fn()
 opt <- with(obj, nlminb(par, fn, gr))
 adrep <- sdreport(obj)
+
+## Explore OSA residuals. These are broken, should match pretty
+## closely. I think it has to do with how the first RE [biom(1)]
+## is initialized
+fg <- oneStepPredict(obj, observation.name='srv_est', method='fullGaussian')
+cdf <- oneStepPredict(obj, observation.name='srv_est',
+                      data.term.indicator='keep', method='cdf')
+osg <- oneStepPredict(obj, observation.name='srv_est',
+                      data.term.indicator='keep', method='oneStepGaussian')
+gen <- oneStepPredict(obj, observation.name='srv_est',
+                      data.term.indicator='keep', method='oneStepGeneric')
+resids <- data.frame(fg=fg$residual, cdf=cdf$residual,
+                     osg=osg$residual, gen=gen$residual)
+pairs(resids)
+
 
 ## Get MLE estimates
 biom.mle <- with(adrep,

@@ -10,6 +10,7 @@ Type objective_function<Type>::operator() ()
   DATA_IVECTOR(yrs_srv_ind);
   DATA_VECTOR(srv_est);
   DATA_VECTOR(srv_cv);
+  DATA_VECTOR_INDICATOR(keep, srv_est);  // For one-step predictions
 
   PARAMETER(logSdLam);
   PARAMETER_VECTOR(biom);
@@ -26,8 +27,12 @@ Type objective_function<Type>::operator() ()
     jnll-=dnorm(biom(i-1),biom(i), exp(logSdLam), true);
   }
   // The observational likelihood
+  Type cdf;
   for(int i=0; i<nobs; i++){
-    jnll-=dnorm(biom(yrs_srv_ind(i)), log(srv_est(i)), srv_sd(i), true);
+    jnll-=keep(i)*dnorm(biom(yrs_srv_ind(i)), log(srv_est(i)), srv_sd(i), true);
+    cdf = squeeze( pnorm(biom(yrs_srv_ind(i)), log(srv_est(i)), srv_sd(i)));
+    jnll -= keep.cdf_lower(i) * log( cdf );
+    jnll -= keep.cdf_upper(i) * log( 1.0 - cdf );
   }
   jnll += pow(logSdLam+1.5,2);// Modest penalty to keep process error from getting too large...
 
